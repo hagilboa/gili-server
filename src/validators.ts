@@ -1,7 +1,8 @@
-import { z } from "zod";
+// src/validators.ts
 
-export const mobileSchema = z.string().regex(/^(?:\\+972|0)5\\d{8}$/, "מספר נייד לא תקין");
-
-export function validateMobile(m: string) {
-  return mobileSchema.safeParse(m);
+export function validatePhone(phone: string): boolean {
+  const cleaned = phone.replace(/\s+/g, "");
+  const isValid = /^05\d{8,9}$/.test(cleaned);
+  console.log("📞 Phone validation:", phone, "=>", isValid);
+  return isValid;
 }
