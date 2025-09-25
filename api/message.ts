@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { classify } from "../src/classifier";
-import { Step } from "../src/stateMachine";
+import { runStep } from "../src/stateMachine"; // ודא שיש פונקציה כזו בקובץ
 
 export default function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
@@ -21,12 +21,12 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // הפעלת stateMachine
-    const reply = Step(sessionId, text || "", classification);
+    const reply = runStep(sessionId, text || "", classification);
 
     return res.status(200).json({
-      reply,          // ההודעה של גילי
-      sessionId,      // מזהה השיחה
-      classification, // סיווג אוטומטי
+      reply,
+      sessionId,
+      classification,
     });
   } catch (err: any) {
     console.error("API error:", err);
