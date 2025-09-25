@@ -1,47 +1,52 @@
+// src/classifier.ts
 import * as XLSX from "xlsx";
 import path from "path";
 
-interface Classification {
+type TaxRow = {
   topic: string;
   subtopic: string;
+  keywords: string[];
+};
+
+let CACHE: TaxRow[] | null = null;
+
+// קורא את האקסל פעם אחת ומטמון בזיכרון
+function loadTaxonomy(): TaxRow[] {
+  if (CACHE) return CACHE;
+
+  const filePath = path.join(process.cwd(), "data", "topics_subtopics_clean.xlsx");
+  const wb = XLSX.readFile(filePath);
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  const rows: any[] = XLSX.utils.sheet_to_json(sheet);
+
+  // גמיש לשמות עמודות אפשריים: אנגלית/עברית
+  CACHE = rows.map((r) => {
+    const topic =
+      r.topic || r.Topic || r["נושא"] || "לא מסווג";
+    const subtopic =
+      r.subtopic || r.Subtopic || r["תת נושא"] || "לא מסווג";
+
+    const kwsCell = r.keywords || r.Keywords || r["מילות מפתח"] || "";
+    const keywords = String(kwsCell)
+      .split(",")
+      .map((s: string) => s.trim().toLowerCase())
+      .filter(Boolean);
+
+    return { topic, subtopic, keywords };
+  });
+
+  return CACHE!;
 }
 
-let taxonomy: { topic: string; subtopic: string; keywords: string[] }[] = [];
+// סיווג טקסט לפי מילות מפתח מהאקסל
+export function classifyText(text: string): { topic: string; subtopic: string } {
+  const taxonomy = loadTaxonomy();
+  const t = (text || "").toLowerCase();
 
-// טעינת אקסל
-export function loadTaxonomy() {
-  try {
-    const filePath = path.join(process.cwd(), "data", "topics_subtopics_clean.xlsx");
-    const workbook = XLSX.readFile(filePath);
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const rows: any[] = XLSX.utils.sheet_to_json(sheet);
-
-    taxonomy = rows.map((row) => ({
-      topic: row["Topic"] || "לא מסווג",
-      subtopic: row["Subtopic"] || "לא מסווג",
-      keywords: (row["Keywords"] || "")
-        .toString()
-        .split(",")
-        .map((k: string) => k.trim().toLowerCase()),
-    }));
-
-    console.log("Taxonomy loaded ✅", taxonomy.length);
-  } catch (err) {
-    console.error("❌ Failed to load taxonomy:", err);
-  }
-}
-
-// סיווג טקסט
-export function classifyText(text: string): Classification {
-  if (!taxonomy.length) loadTaxonomy();
-
-  const lowerText = text.toLowerCase();
-
-  for (const item of taxonomy) {
-    if (item.keywords.some((kw) => lowerText.includes(kw))) {
-      return { topic: item.topic, subtopic: item.subtopic };
+  for (const row of taxonomy) {
+    if (row.keywords.length && row.keywords.some((kw) => t.includes(kw))) {
+      return { topic: row.topic, subtopic: row.subtopic };
     }
   }
-
   return { topic: "לא מסווג", subtopic: "לא מסווג" };
 }
