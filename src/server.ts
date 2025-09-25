@@ -1,7 +1,7 @@
 import express from "express";
 import bodyParser from "body-parser";
 import { classify } from "./classifier";
-import { validatePhone } from "./validators";
+import { validateMobile } from "./validators";
 import { sendToZapier } from "./zapier";
 
 const app = express();
@@ -49,7 +49,7 @@ app.post("/api/message", async (req, res) => {
 
   if (text) {
     if (currentStep === "mobile") {
-      if (!validatePhone(text)) {
+      if (!validateMobile(text)) {
         return res.json({ reply: "מספר הטלפון לא תקין, נסה שוב בבקשה" });
       }
     }
