@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { classifyText } from "../src/classifier";
-import { step } from "../src/stateMachine";
+import { classify } from "../src/classifier";
+import { Step } from "../src/stateMachine";
 
 export default function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
@@ -17,19 +17,22 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     // סיווג טקסט לנושא/תת־נושא
     let classification = { topic: "לא מסווג", subtopic: "לא מסווג" };
     if (text) {
-      classification = classifyText(text);
+      classification = classify(text);
     }
 
-    // מעביר את הקלט ל־stateMachine כדי לקבל את ההודעה של גילי
-    const reply = step(sessionId, text || "", classification);
+    // הפעלת stateMachine
+    const reply = Step(sessionId, text || "", classification);
 
     return res.status(200).json({
-      reply,        // ההודעה של גילי
-      sessionId,    // מזהה השיחה
+      reply,          // ההודעה של גילי
+      sessionId,      // מזהה השיחה
       classification, // סיווג אוטומטי
     });
   } catch (err: any) {
     console.error("API error:", err);
-    return res.status(500).json({ error: "Internal server error", details: err.message });
+    return res.status(500).json({
+      error: "Internal server error",
+      details: err.message,
+    });
   }
 }
