@@ -1,32 +1,47 @@
 import * as XLSX from "xlsx";
 import path from "path";
 
-interface Taxonomy {
+interface Classification {
   topic: string;
   subtopic: string;
 }
 
-let taxonomy: Taxonomy[] = [];
+let taxonomy: { topic: string; subtopic: string; keywords: string[] }[] = [];
 
-// טוען את קובץ האקסל
+// טעינת אקסל
 export function loadTaxonomy() {
-  const filePath = path.join(process.cwd(), "data", "topics_subtopics_clean.xlsx");
-  const workbook = XLSX.readFile(filePath);
-  const sheet = workbook.Sheets[workbook.SheetNames[0]];
-  taxonomy = XLSX.utils.sheet_to_json(sheet) as Taxonomy[];
+  try {
+    const filePath = path.join(process.cwd(), "data", "topics_subtopics_clean.xlsx");
+    const workbook = XLSX.readFile(filePath);
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows: any[] = XLSX.utils.sheet_to_json(sheet);
+
+    taxonomy = rows.map((row) => ({
+      topic: row["Topic"] || "לא מסווג",
+      subtopic: row["Subtopic"] || "לא מסווג",
+      keywords: (row["Keywords"] || "")
+        .toString()
+        .split(",")
+        .map((k: string) => k.trim().toLowerCase()),
+    }));
+
+    console.log("Taxonomy loaded ✅", taxonomy.length);
+  } catch (err) {
+    console.error("❌ Failed to load taxonomy:", err);
+  }
 }
 
-// מסווג טקסט לקטגוריה
-export function classifyText(text: string): Taxonomy {
-  if (!taxonomy.length) {
-    loadTaxonomy();
+// סיווג טקסט
+export function classifyText(text: string): Classification {
+  if (!taxonomy.length) loadTaxonomy();
+
+  const lowerText = text.toLowerCase();
+
+  for (const item of taxonomy) {
+    if (item.keywords.some((kw) => lowerText.includes(kw))) {
+      return { topic: item.topic, subtopic: item.subtopic };
+    }
   }
 
-  const found = taxonomy.find(
-    (row) =>
-      text.includes(row.topic) ||
-      text.includes(row.subtopic)
-  );
-
-  return found || { topic: "לא מסווג", subtopic: "לא מסווג" };
+  return { topic: "לא מסווג", subtopic: "לא מסווג" };
 }
