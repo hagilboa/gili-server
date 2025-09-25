@@ -10,7 +10,6 @@ type Pair = {
 let pairs: Pair[] = [];
 
 try {
-  // בונים נתיב מלא לקובץ
   const filePath = path.join(process.cwd(), "data", "topics_subtopics_clean.xlsx");
   console.log("🔎 Loading classifier data from:", filePath);
 
@@ -31,7 +30,7 @@ try {
 
   console.log("✅ Loaded classifier pairs:", pairs.length);
   if (pairs.length > 0) {
-    console.log("👉 Example pairs:", pairs.slice(0, 3)); // 3 הראשונים לדוגמה
+    console.log("👉 Example pairs:", pairs.slice(0, 3));
   }
 } catch (err) {
   console.error("❌ Error loading classifier Excel file:", err);
