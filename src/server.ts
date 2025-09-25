@@ -3,11 +3,12 @@ import bodyParser from "body-parser";
 import { classify } from "./classifier";
 import { validateMobile } from "./validators";
 import { sendToZapier } from "./zapier";
+import { config } from "./config";
 
 const app = express();
 app.use(bodyParser.json());
 
-// ניהול סשנים בזיכרון
+// ניהול סשנים בזיכרון (בשלב הבא אפשר לעבור ל-Redis)
 const sessions = new Map<string, any>();
 
 // שלבי השיחה
@@ -33,6 +34,7 @@ const prompts: Record<string, string> = {
   confirm: "האם לאשר ולשלוח את הפנייה?"
 };
 
+// ===== פונקציית API ראשית =====
 app.post("/api/message", async (req, res) => {
   const { sessionId, text } = req.body;
 
@@ -40,6 +42,7 @@ app.post("/api/message", async (req, res) => {
     return res.status(400).json({ error: "Missing sessionId" });
   }
 
+  // יצירת סשן חדש אם לא קיים
   if (!sessions.has(sessionId)) {
     sessions.set(sessionId, { stepIndex: 0, data: {} });
   }
@@ -47,6 +50,7 @@ app.post("/api/message", async (req, res) => {
   const session = sessions.get(sessionId);
   let currentStep = steps[session.stepIndex];
 
+  // שמירת תשובה מהמשתמש
   if (text) {
     if (currentStep === "mobile") {
       if (!validateMobile(text)) {
@@ -66,16 +70,19 @@ app.post("/api/message", async (req, res) => {
     currentStep = steps[session.stepIndex];
   }
 
+  // אם סיימנו את כל השלבים → שליחה ל-Zapier
   if (!currentStep) {
     const data = session.data;
 
+    // סיווג
     const { topic, subtopic } = classify(data.description || "");
     data.topic = topic;
     data.subtopic = subtopic;
 
-    console.log("📤 Sending data to Zapier:", data);
+    console.log("📤 Sending to Zapier:", JSON.stringify(data, null, 2));
     await sendToZapier(data);
 
+    // מחיקת הסשן
     sessions.delete(sessionId);
 
     return res.json({
@@ -83,6 +90,7 @@ app.post("/api/message", async (req, res) => {
     });
   }
 
+  // שלב סיכום לפני אישור
   if (currentStep === "confirm") {
     const d = session.data;
     return res.json({
@@ -90,13 +98,14 @@ app.post("/api/message", async (req, res) => {
     });
   }
 
+  // שאלה לשלב הבא
   res.json({ reply: prompts[currentStep] });
 });
 
+// ===== הרצה מקומית =====
 if (require.main === module) {
-  const port = process.env.PORT || 3000;
-  app.listen(port, () => {
-    console.log(`🚀 Server running on port ${port}`);
+  app.listen(config.port, () => {
+    console.log(`🚀 Server running on port ${config.port}`);
   });
 }
 
