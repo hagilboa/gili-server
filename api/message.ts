@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { classify } from "../src/classifier";
-import { runStep } from "../src/stateMachine"; // ודא שיש פונקציה כזו בקובץ
+import { runStep } from "../src/stateMachine";
 
 export default function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
