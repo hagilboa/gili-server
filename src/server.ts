@@ -1,112 +1,72 @@
 import express from "express";
 import bodyParser from "body-parser";
-import { classify } from "./classifier";
-import { validateMobile } from "./validators";
-import { sendToZapier } from "./zapier";
-import { config } from "./config";
+import cors from "cors";
+import { classifyText } from "./classifier";   // עדכון ל-classifyText
+import { isStepValid, steps, Step } from "./stateMachine";
 
 const app = express();
+const port = process.env.PORT || 3000;
+
 app.use(bodyParser.json());
+app.use(
+  cors({
+    origin: process.env.ORIGIN_ALLOWLIST?.split(",") || "*",
+  })
+);
 
-// ניהול סשנים בזיכרון (בשלב הבא אפשר לעבור ל-Redis)
-const sessions = new Map<string, any>();
+// ניהול שיחה פשוט בזיכרון
+const sessions: Record<
+  string,
+  { stepIndex: number; data: Record<string, string> }
+> = {};
 
-// שלבי השיחה
-const steps = [
-  "first_name",
-  "last_name",
-  "mobile",
-  "reporter_city",
-  "event_city",
-  "description",
-  "attachment",
-  "confirm"
-];
+// ברירת מחדל לתגובה
+const getReply = (sessionId: string, message: string) => {
+  if (!sessions[sessionId]) {
+    sessions[sessionId] = { stepIndex: 0, data: {} };
+    return "שלום 👋, מה שמך הפרטי?";
+  }
 
-const prompts: Record<string, string> = {
-  first_name: "היי, אני גילי ממוקד מועצה אזורית הגלבוע 🌿. איך קוראים לך?",
-  last_name: "ומה שם המשפחה?",
-  mobile: "מה מספר הטלפון הנייד שלך?",
-  reporter_city: "באיזה יישוב אתה גר?",
-  event_city: "באיזה יישוב התרחש האירוע?",
-  description: "במה אפשר לעזור?",
-  attachment: "רוצה לצרף תמונה או מסמך שיעזור לנו? (כן/לא)",
-  confirm: "האם לאשר ולשלוח את הפנייה?"
+  const session = sessions[sessionId];
+  const currentStep: Step = steps[session.stepIndex];
+
+  // בדיקת תקינות התשובה
+  if (!isStepValid(currentStep, message)) {
+    return `הערך שהוזן לא תקין עבור ${currentStep}, נסה שוב ✏️`;
+  }
+
+  // שמירת תשובה
+  session.data[currentStep] = message;
+  session.stepIndex++;
+
+  // אם סיימנו את כל השלבים
+  if (session.stepIndex >= steps.length) {
+    const classification = classifyText(
+      Object.values(session.data).join(" ")
+    );
+
+    return `תודה 🙏! קיבלנו את כל הפרטים. 
+סיווג: נושא - ${classification.topic}, תת נושא - ${classification.subtopic}`;
+  }
+
+  // המשך לשאלה הבאה
+  const nextStep = steps[session.stepIndex];
+  return `אנא ספק ${nextStep}`;
 };
 
-// ===== פונקציית API ראשית =====
-app.post("/api/message", async (req, res) => {
-  const { sessionId, text } = req.body;
+// ראוט API
+app.post("/api/message", (req, res) => {
+  const { sessionId, message } = req.body;
 
   if (!sessionId) {
     return res.status(400).json({ error: "Missing sessionId" });
   }
 
-  // יצירת סשן חדש אם לא קיים
-  if (!sessions.has(sessionId)) {
-    sessions.set(sessionId, { stepIndex: 0, data: {} });
-  }
-
-  const session = sessions.get(sessionId);
-  let currentStep = steps[session.stepIndex];
-
-  // שמירת תשובה מהמשתמש
-  if (text) {
-    if (currentStep === "mobile") {
-      if (!validateMobile(text)) {
-        return res.json({ reply: "מספר הטלפון לא תקין, נסה שוב בבקשה" });
-      }
-    }
-
-    if (currentStep === "attachment" && text.toLowerCase() === "לא") {
-      session.data.attachment = "";
-    } else if (currentStep === "attachment" && text.toLowerCase() !== "לא") {
-      session.data.attachment = text;
-    } else {
-      session.data[currentStep] = text;
-    }
-
-    session.stepIndex++;
-    currentStep = steps[session.stepIndex];
-  }
-
-  // אם סיימנו את כל השלבים → שליחה ל-Zapier
-  if (!currentStep) {
-    const data = session.data;
-
-    // סיווג
-    const { topic, subtopic } = classify(data.description || "");
-    data.topic = topic;
-    data.subtopic = subtopic;
-
-    console.log("📤 Sending to Zapier:", JSON.stringify(data, null, 2));
-    await sendToZapier(data);
-
-    // מחיקת הסשן
-    sessions.delete(sessionId);
-
-    return res.json({
-      reply: `תודה ${data.first_name}, הפנייה שלך נשלחה למוקד ✅`
-    });
-  }
-
-  // שלב סיכום לפני אישור
-  if (currentStep === "confirm") {
-    const d = session.data;
-    return res.json({
-      reply: `תודה ${d.first_name}, ריכזתי את הפנייה שלך:\n• תיאור: ${d.description}\n• נושא: ${d.topic || "לא סווג"} – ${d.subtopic || "לא סווג"}\n• מקום מגורים: ${d.reporter_city}\n• מקום האירוע: ${d.event_city}\n• טלפון: ${d.mobile}\n\nלאשר ולשלוח?`
-    });
-  }
-
-  // שאלה לשלב הבא
-  res.json({ reply: prompts[currentStep] });
+  const reply = getReply(sessionId, message || "");
+  res.json({ reply, sessionId });
 });
 
-// ===== הרצה מקומית =====
-if (require.main === module) {
-  app.listen(config.port, () => {
-    console.log(`🚀 Server running on port ${config.port}`);
-  });
-}
-
-export default app;
+// הפעלת שרת
+app.listen(port, () => {
+  console.log(`Server is running on http://localhost:${port}`);
+});
