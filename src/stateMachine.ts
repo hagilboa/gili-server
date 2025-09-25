@@ -21,7 +21,7 @@ export const steps: Step[] = [
   "confirm"
 ];
 
-// פונקציה לבדיקת תקינות ערך בשלב
+// בדיקת ערך לשלב
 export function isStepValid(step: Step, value: string): boolean {
   if (step === "mobile") {
     return validateMobile(value);
