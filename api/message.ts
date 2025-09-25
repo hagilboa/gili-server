@@ -1,5 +1,5 @@
-import { classifyWithTaxonomy, loadTaxonomy } from "../src/classifier";
-import { steps, isStepValid, Step } from "../src/stateMachine";
+// api/message.ts
+import { classifyText } from "../src/classifier";
 
 export default function handler(req: any, res: any) {
   if (req.method !== "POST") {
@@ -7,28 +7,20 @@ export default function handler(req: any, res: any) {
   }
 
   try {
-    const { sessionId, message, step, value } = req.body;
-
-    // טוען את הטקסונומיה פעם אחת בכל בקשה
-    const taxonomy = loadTaxonomy();
-
-    // סיווג טקסט
-    const classification = classifyWithTaxonomy(message || "", taxonomy);
-
-    // בדיקת שלב אם נשלח step
-    let stepValid: boolean | undefined = undefined;
-    if (step && value !== undefined) {
-      stepValid = isStepValid(step as Step, value);
+    const { sessionId, text } = req.body || {};
+    if (!sessionId) {
+      return res.status(400).json({ error: "sessionId is required" });
     }
 
+    const classification = classifyText(text || "");
+
     return res.status(200).json({
-      reply: `גילי כאן ✅`,
+      reply: "קיבלתי ✅",
       sessionId,
       classification,
-      stepValid,
     });
-  } catch (error: any) {
-    console.error("Error in /api/message:", error);
-    return res.status(500).json({ error: "Internal server error", details: error.message });
+  } catch (err: any) {
+    console.error("API error:", err);
+    return res.status(500).json({ error: "Internal server error", details: err?.message });
   }
 }
