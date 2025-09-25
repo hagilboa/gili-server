@@ -21,7 +21,7 @@ export const steps: Step[] = [
   "confirm"
 ];
 
-// פונקציה לבדיקת שלב
+// בדיקת ערך לשלב מסוים
 export function isStepValid(step: Step, value: string): boolean {
   if (step === "mobile") {
     return validateMobile(value);
@@ -29,22 +29,31 @@ export function isStepValid(step: Step, value: string): boolean {
   return value.trim().length > 0;
 }
 
-// פונקציה לניהול שיחה (State Machine)
+// לוגיקה שמנהלת את התקדמות השיחה
 export function runStep(
   sessionId: string,
-  text: string,
-  classification: { topic: string; subtopic: string }
+  step: Step,
+  value: string,
+  classification?: { topic: string; subtopic: string }
 ): string {
-  // בשלב ראשון – תוכל להחזיר תשובה בסיסית
-  // בהמשך נוסיף לוגיקה לניהול session
-
-  if (!text || text.trim() === "") {
-    return "מה תרצה לדווח?";
+  switch (step) {
+    case "first_name":
+      return `תודה ${value}, מה שם המשפחה שלך?`;
+    case "last_name":
+      return `קיבלתי, מה מספר הטלפון הנייד שלך?`;
+    case "mobile":
+      return `מעולה, איפה אתה גר?`;
+    case "reporter_city":
+      return `איפה התרחש האירוע?`;
+    case "event_city":
+      return `תוכל לתאר בקצרה את הפנייה?`;
+    case "description":
+      return `רוצה לצרף תמונה או מסמך שיכול לעזור?`;
+    case "attachment":
+      return `הנה הסיכום: ${classification?.topic || "לא מסווג"} - ${classification?.subtopic || "לא מסווג"}. לאשר ולשלוח?`;
+    case "confirm":
+      return `הפנייה שלך נשלחה בהצלחה ✅ תודה!`;
+    default:
+      return "לא זיהיתי שלב מתאים";
   }
-
-  if (!classification || classification.topic === "לא מסווג") {
-    return "קיבלתי ✅, תוכל להסביר קצת יותר?";
-  }
-
-  return `קיבלתי את הפנייה שלך בנושא "${classification.topic}" (${classification.subtopic}) ✅`;
 }
